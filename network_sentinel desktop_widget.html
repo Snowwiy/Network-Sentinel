@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Network Sentinel - Windows 11 Desktop Widget</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <!-- FontAwesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <style>
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+      background: radial-gradient(circle at 20% 20%, #171d2b 0%, #0d1117 70%, #07090d 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Windows 11 Acrylic / Mica glassmorphic style */
+    .win11-acrylic {
+      background: rgba(26, 32, 44, 0.72);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.7),
+                  0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+    }
+
+    .win11-subcard {
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .win11-subcard:hover {
+      border-color: rgba(56, 189, 248, 0.25);
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    /* Glow pulse animations */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 0.2; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+
+    .pulse-indicator {
+      animation: pulse-ring 2.4s infinite cubic-bezier(0.4, 0, 0.6, 1);
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .toast-anim {
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  </style>
+</head>
+<body class="text-slate-200 flex flex-col items-center justify-center p-3 sm:p-6 min-h-screen relative">
+
+  <!-- Desktop Environment Simulation Header / Controls -->
+  <header class="w-full max-w-4xl mb-4 flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+    <div class="flex items-center gap-2 text-slate-300">
+      <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+      <span class="font-semibold tracking-wide uppercase text-slate-400">Simulador de Redes:</span>
+      <span class="text-cyan-300">Prueba cómo reacciona el widget al cambiar de conexión</span>
+    </div>
+
+    <!-- Quick Switcher Bar -->
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <button onclick="switchNetwork('vpn')" class="net-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/80 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-shield-halved"></i> VPN Corporativa
+      </button>
+      <button onclick="switchNetwork('office')" class="net-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-network-wired"></i> Red Oficina
+      </button>
+      <button onclick="switchNetwork('cctv')" class="net-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-video"></i> Cámaras CCTV / IoT
+      </button>
+      <button onclick="switchNetwork('hotspot')" class="net-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-mobile-screen-button"></i> Hotspot 5G
+      </button>
+      <button onclick="switchNetwork('home')" class="net-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-house-signal"></i> Wi-Fi Casa
+      </button>
+      <button onclick="switchNetwork('offline')" class="net-btn px-2 py-1.5 rounded-lg text-xs font-medium bg-rose-950/40 border border-rose-800/40 text-rose-300 hover:bg-rose-900/60 transition">
+        <i class="fa-solid fa-ban"></i> Sin Red
+      </button>
+    </div>
+  </header>
+
+  <!-- WINDOWS 11 FLOATING WIDGET CONTAINER -->
+  <main class="w-full max-w-[420px] win11-acrylic rounded-3xl p-4 shadow-2xl relative transition-all duration-300" id="widgetContainer">
+
+    <!-- Top Window Titlebar (Windows 11 Mica Style) -->
+    <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-700/40 text-xs">
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-400/30 flex items-center justify-center text-cyan-400">
+          <i class="fa-solid fa-tower-broadcast text-[11px]"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-sm tracking-tight text-white flex items-center gap-1.5">
+            Network Sentinel
+            <span class="text-[10px] font-normal px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">v2.4</span>
+          </h1>
+        </div>
+      </div>
+
+      <!-- Window controls (Pin, Minimize, Settings) -->
+      <div class="flex items-center gap-1">
+        <button id="pinBtn" onclick="togglePin()" title="Fijar siempre visible" class="w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition">
+          <i class="fa-solid fa-thumbtack text-xs"></i>
+        </button>
+        <button onclick="refreshData()" title="Refrescar detección" class="w-7 h-7 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-white/10 flex items-center justify-center transition">
+          <i class="fa-solid fa-arrows-rotate text-xs" id="refreshIcon"></i>
+        </button>
+        <button onclick="openPythonModal()" title="Ver código PyQt6 para Windows" class="w-7 h-7 rounded-lg text-slate-400 hover:text-purple-300 hover:bg-white/10 flex items-center justify-center transition">
+          <i class="fa-brands fa-python text-sm"></i>
+        </button>
+        <button onclick="toggleMinimize()" title="Minimizar / Expandir" class="w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition">
+          <i class="fa-solid fa-minus text-xs"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Network Badge Banner -->
+    <div id="badgeBanner" class="p-3 rounded-2xl mb-3 flex items-center justify-between transition-all duration-300 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
+      <div class="flex items-center gap-3">
+        <div id="badgeIconBox" class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-lg relative">
+          <i id="badgeIcon" class="fa-solid fa-shield-halved"></i>
+          <span id="badgePulse" class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 pulse-indicator"></span>
+        </div>
+        <div>
+          <p class="text-[10px] uppercase tracking-wider font-semibold opacity-75">Red Detectada</p>
+          <h2 id="badgeTitle" class="text-sm font-bold text-white tracking-tight">VPN Corporativa</h2>
+          <span id="badgeSub" class="text-[11px] font-mono text-emerald-300">Túnel WireGuard (wg0)</span>
+        </div>
+      </div>
+      <div class="text-right">
+        <span id="statusTag" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 uppercase">Segura</span>
+        <p id="uptimeLabel" class="text-[10px] text-slate-400 mt-1 mono">Up: 01h 14m</p>
+      </div>
+    </div>
+
+    <!-- Core IP & Gateway Metrics Grid -->
+    <div class="grid grid-cols-2 gap-2 mb-3">
+      <!-- Local IP -->
+      <div class="win11-subcard p-2.5 rounded-2xl relative group">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-[11px] font-medium flex items-center gap-1.5">
+            <i class="fa-solid fa-desktop text-cyan-400 text-[10px]"></i> Tu IP Local
+          </span>
+          <button onclick="copyToClipboard('ipLocalVal', 'IP Local copiada')" title="Copiar IP" class="text-[10px] opacity-0 group-hover:opacity-100 hover:text-cyan-300 transition">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+        </div>
+        <p id="ipLocalVal" class="text-sm font-bold text-white mono tracking-tight">10.8.0.42/24</p>
+        <span id="ifaceLabel" class="text-[10px] text-slate-400 font-mono">Iface: wg0-corp</span>
+      </div>
+
+      <!-- Gateway -->
+      <div class="win11-subcard p-2.5 rounded-2xl relative group">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-[11px] font-medium flex items-center gap-1.5">
+            <i class="fa-solid fa-route text-amber-400 text-[10px]"></i> Gateway (GW)
+          </span>
+          <button onclick="copyToClipboard('gatewayVal', 'Gateway copiado')" title="Copiar Gateway" class="text-[10px] opacity-0 group-hover:opacity-100 hover:text-cyan-300 transition">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+        </div>
+        <p id="gatewayVal" class="text-sm font-bold text-white mono tracking-tight">10.8.0.1</p>
+        <span id="gwMacLabel" class="text-[10px] text-slate-400 font-mono">MAC: e4:8d:8c:12:f3:aa</span>
+      </div>
+
+      <!-- Segment / Subnet -->
+      <div class="win11-subcard p-2.5 rounded-2xl">
+        <span class="text-[11px] font-medium text-slate-400 flex items-center gap-1.5 mb-1">
+          <i class="fa-solid fa-diagram-project text-purple-400 text-[10px]"></i> Segmento de Red
+        </span>
+        <p id="segmentVal" class="text-xs font-semibold text-slate-200 mono">10.8.0.0/24</p>
+        <span id="broadcastVal" class="text-[10px] text-slate-400 font-mono">BCast: 10.8.0.255</span>
+      </div>
+
+      <!-- Public IP & ISP -->
+      <div class="win11-subcard p-2.5 rounded-2xl relative group">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-[11px] font-medium flex items-center gap-1.5">
+            <i class="fa-solid fa-globe text-emerald-400 text-[10px]"></i> IP Pública
+          </span>
+          <button onclick="copyToClipboard('publicIpVal', 'IP Pública copiada')" title="Copiar IP Pública" class="text-[10px] opacity-0 group-hover:opacity-100 hover:text-cyan-300 transition">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+        </div>
+        <p id="publicIpVal" class="text-xs font-bold text-white mono">189.156.45.101</p>
+        <span id="ispVal" class="text-[10px] text-slate-400 truncate block">Cloudflare VPN (MX)</span>
+      </div>
+    </div>
+
+    <!-- Real-time Latency & Mini Ping Sparkline -->
+    <div class="win11-subcard p-3 rounded-2xl mb-3">
+      <div class="flex items-center justify-between mb-1.5">
+        <div class="flex items-center gap-3">
+          <div>
+            <span class="text-[10px] text-slate-400 uppercase tracking-wider">Ping GW</span>
+            <p id="gwPingVal" class="text-xs font-bold text-cyan-300 mono">3 ms</p>
+          </div>
+          <div class="h-6 w-px bg-slate-700/60"></div>
+          <div>
+            <span class="text-[10px] text-slate-400 uppercase tracking-wider">Ping Ext (1.1.1.1)</span>
+            <p id="extPingVal" class="text-xs font-bold text-emerald-300 mono">24 ms</p>
+          </div>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 font-mono" id="lossLabel">0% Loss</span>
+        </div>
+      </div>
+
+      <!-- Dynamic mini sparkline canvas -->
+      <canvas id="pingCanvas" height="34" class="w-full rounded-lg bg-black/20"></canvas>
+    </div>
+
+    <!-- History / Conmutación de red (Switching Log) -->
+    <div class="mb-3">
+      <div class="flex items-center justify-between mb-1 text-[11px] text-slate-400 px-1">
+        <span class="font-semibold uppercase tracking-wider flex items-center gap-1.5">
+          <i class="fa-solid fa-clock-rotate-left text-slate-400"></i> Historial de Cambios
+        </span>
+        <button onclick="clearLogs()" class="hover:text-slate-200 transition text-[10px]">Limpiar</button>
+      </div>
+
+      <div id="logsContainer" class="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+    <!-- Footer Quick Actions -->
+    <div class="flex items-center justify-between pt-2 border-t border-slate-700/40 text-[11px]">
+      <button onclick="copyAllDetails()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 flex items-center gap-1.5 transition">
+        <i class="fa-regular fa-clipboard"></i> Copiar Resumen
+      </button>
+
+      <div class="flex items-center gap-2 text-slate-400 text-[10px] mono">
+        <i class="fa-solid fa-circle-dot text-emerald-400 animate-pulse text-[8px]"></i>
+        <span>Escuchando NIC Windows...</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Interactive Toast Notification Simulated in Windows -->
+  <div id="toastNotification" class="fixed bottom-6 right-6 win11-acrylic p-3.5 rounded-2xl max-w-sm w-full shadow-2xl flex items-start gap-3 transform translate-y-24 opacity-0 pointer-events-none toast-anim z-50 border border-cyan-500/30">
+    <div id="toastIconBox" class="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-400 shrink-0 mt-0.5">
+      <i id="toastIcon" class="fa-solid fa-network-wired"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center justify-between">
+        <h4 id="toastTitle" class="text-xs font-bold text-white tracking-tight">Cambio de Red Detectado</h4>
+        <span class="text-[9px] text-slate-400 mono" id="toastTime">Ahora</span>
+      </div>
+      <p id="toastMsg" class="text-[11px] text-slate-300 mt-0.5 leading-snug">Conectado a la VPN Corporativa (10.8.0.42)</p>
+    </div>
+    <button onclick="hideToast()" class="text-slate-400 hover:text-white text-xs">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+
+  <!-- Python / PowerShell Desktop Native Code Modal -->
+  <div id="codeModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="win11-acrylic rounded-3xl p-5 max-w-2xl w-full border border-slate-700 shadow-2xl max-h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+        <div class="flex items-center gap-2">
+          <i class="fa-brands fa-python text-yellow-400 text-lg"></i>
+          <h3 class="font-bold text-sm text-white">Código Python Real para Windows (PyQt6 / QSystemTray)</h3>
+        </div>
+        <button onclick="closePythonModal()" class="text-slate-400 hover:text-white text-base">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-300 my-2">
+        Ejecuta este script en Windows. Usa el API nativo de Windows (o `psutil`/`netifaces`) para escuchar cambios de Gateway en tiempo real y mostrar este widget flotante transparente:
+      </p>
+
+      <div class="flex-1 overflow-y-auto bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] mono text-cyan-300">
+<pre id="pythonCodeSnippet">
+import sys, time, socket, urllib.request, subprocess
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, 
+                             QHBoxLayout, QFrame, QPushButton, QSystemTrayIcon)
+
+class NetworkMonitor(QWidget):
+    def __init__(self):
+        super().__init__()
+        # Windows 11 Frameless & Always On Top
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.SubWindow)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.resize(340, 240)
+        self.last_gateway = ""
+
+        # Layout UI
+        layout = QVBoxLayout(self)
+        self.card = QFrame()
+        self.card.setStyleSheet("""
+            background-color: rgba(20, 26, 38, 220);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 18px;
+            color: white;
+            font-family: 'Segoe UI';
+        """)
+        card_layout = QVBoxLayout(self.card)
+
+        self.title_lbl = QLabel("🛡️ DETECTOR DE RED ACTIVA")
+        self.title_lbl.setStyleSheet("font-weight: bold; font-size: 11px; color: #38bdf8;")
+        self.status_lbl = QLabel("Detectando...")
+        self.status_lbl.setStyleSheet("font-size: 15px; font-weight: bold;")
+        self.ip_lbl = QLabel("IP Local: -- | GW: --")
+        self.ip_lbl.setStyleSheet("font-family: Consolas; font-size: 12px; color: #a5f3fc;")
+
+        card_layout.addWidget(self.title_lbl)
+        card_layout.addWidget(self.status_lbl)
+        card_layout.addWidget(self.ip_lbl)
+        layout.addWidget(self.card)
+
+        # Polling Timer (Cada 2 segundos)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.check_network)
+        self.timer.start(2000)
+        self.check_network()
+
+    def check_network(self):
+        try:
+            # Obtener Gateway predeterminado en Windows
+            res = subprocess.check_output("route print 0.0.0.0", shell=True).decode()
+            gw = [l.split()[2] for l in res.splitlines() if "0.0.0.0" in l and len(l.split()) > 4][0]
+            # IP local
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+
+            # Clasificar Segmento
+            env = "Wi-Fi Casa / Genérica"
+            if gw.startswith("10.8.") or gw.startswith("10.0."):
+                env = "🛡️ VPN Corporativa"
+            elif gw.startswith("192.168.100."):
+                env = "📹 VLAN Cámaras IoT"
+            elif gw.startswith("192.168.43.") or gw.startswith("172.20.10."):
+                env = "📱 Hotspot Celular"
+            elif gw.startswith("172.16."):
+                env = "🏢 Red de Empleados"
+
+            self.status_lbl.setText(env)
+            self.ip_lbl.setText(f"IP: {local_ip}\nGW: {gw}")
+
+            # Notificar si cambió
+            if self.last_gateway and self.last_gateway != gw:
+                print(f"[CAMBIO DETECTADO] Salto de {self.last_gateway} a {gw}")
+            self.last_gateway = gw
+        except Exception as e:
+            self.status_lbl.setText("Desconectado / Error")
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    w = NetworkMonitor()
+    w.show()
+    sys.exit(app.exec())
+</pre>
+      </div>
+
+      <div class="flex items-center justify-between pt-3 mt-2 border-t border-slate-800">
+        <span class="text-[11px] text-slate-400">Instala dependencias con: <code class="text-cyan-300">pip install PyQt6</code></span>
+        <button onclick="copyPythonCode()" class="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center gap-1.5 transition">
+          <i class="fa-regular fa-copy"></i> Copiar Código Python
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // PRESET NETWORK PROFILES
+    const networkProfiles = {
+      vpn: {
+        id: 'vpn',
+        name: 'VPN Corporativa',
+        sub: 'Túnel WireGuard (wg0-corp)',
+        tag: 'Segura',
+        ipLocal: '10.8.0.42/24',
+        gateway: '10.8.0.1',
+        gwMac: 'e4:8d:8c:12:f3:aa',
+        segment: '10.8.0.0/24',
+        bcast: '10.8.0.255',
+        iface: 'wg0-corp',
+        publicIp: '189.156.45.101',
+        isp: 'Cloudflare Zero Trust (MX)',
+        icon: 'fa-shield-halved',
+        colorTheme: 'emerald',
+        gwPing: 3,
+        extPing: 22,
+        vpnActive: true
+      },
+      office: {
+        id: 'office',
+        name: 'Wi-Fi Oficina / Empleados',
+        sub: 'SSID: Corp_Workers_5GHz',
+        tag: 'Corporativa',
+        ipLocal: '172.16.20.104/22',
+        gateway: '172.16.20.1',
+        gwMac: '70:69:79:3a:42:01',
+        segment: '172.16.20.0/22',
+        bcast: '172.16.23.255',
+        iface: 'Wi-Fi 6E (Intel AX210)',
+        publicIp: '201.144.112.5',
+        isp: 'Totalplay Empresarial',
+        icon: 'fa-network-wired',
+        colorTheme: 'cyan',
+        gwPing: 2,
+        extPing: 14,
+        vpnActive: false
+      },
+      cctv: {
+        id: 'cctv',
+        name: 'VLAN Cámaras IoT / CCTV',
+        sub: 'VLAN 100 - Subred Restringida',
+        tag: 'Aislada / No Internet',
+        ipLocal: '192.168.100.15/24',
+        gateway: '192.168.100.1',
+        gwMac: '00:1a:2b:99:43:dd',
+        segment: '192.168.100.0/24',
+        bcast: '192.168.100.255',
+        iface: 'Ethernet Realtek 2.5GbE',
+        publicIp: 'Sin Salida NAT',
+        isp: 'Acceso Local Únicamente',
+        icon: 'fa-video',
+        colorTheme: 'purple',
+        gwPing: 1,
+        extPing: 999,
+        vpnActive: false
+      },
+      hotspot: {
+        id: 'hotspot',
+        name: 'Hotspot Móvil 5G',
+        sub: 'USB Tethering / iPhone 15',
+        tag: 'Datos Móviles',
+        ipLocal: '172.20.10.4/28',
+        gateway: '172.20.10.1',
+        gwMac: 'ba:44:9c:88:12:05',
+        segment: '172.20.10.0/28',
+        bcast: '172.20.10.15',
+        iface: 'Apple Mobile Ethernet',
+        publicIp: '187.190.22.84',
+        isp: 'Telcel 5G Ultra Móvil',
+        icon: 'fa-mobile-screen-button',
+        colorTheme: 'amber',
+        gwPing: 18,
+        extPing: 48,
+        vpnActive: false
+      },
+      home: {
+        id: 'home',
+        name: 'Wi-Fi Residencial',
+        sub: 'SSID: Fibra_Optica_Casa',
+        tag: 'Doméstica',
+        ipLocal: '192.168.1.78/24',
+        gateway: '192.168.1.1',
+        gwMac: '44:a5:6e:54:19:bc',
+        segment: '192.168.1.0/24',
+        bcast: '192.168.1.255',
+        iface: 'Wi-Fi (MediaTek MT7921)',
+        publicIp: '189.215.10.33',
+        isp: 'Izzi Telecom 300Mbps',
+        icon: 'fa-house-signal',
+        colorTheme: 'blue',
+        gwPing: 4,
+        extPing: 29,
+        vpnActive: false
+      },
+      offline: {
+        id: 'offline',
+        name: 'Desconectado de la Red',
+        sub: 'Ninguna interfaz con enlace físico',
+        tag: 'Offline',
+        ipLocal: '127.0.0.1/8',
+        gateway: 'No alcanzable',
+        gwMac: '00:00:00:00:00:00',
+        segment: 'Loopback',
+        bcast: '127.255.255.255',
+        iface: 'Desconectado',
+        publicIp: 'Desconectado',
+        isp: 'Sin Acceso a Internet',
+        icon: 'fa-ban',
+        colorTheme: 'rose',
+        gwPing: 0,
+        extPing: 0,
+        vpnActive: false
+      }
+    };
+
+    let currentNetwork = 'vpn';
+    let logs = [
+      { time: '17:35:10', from: 'Wi-Fi Oficina (172.16.20.1)', to: 'VPN Corporativa (10.8.0.1)', status: 'success' },
+      { time: '16:12:04', from: 'Wi-Fi Residencial (192.168.1.1)', to: 'Wi-Fi Oficina (172.16.20.1)', status: 'switch' }
+    ];
+
+    let isPinned = false;
+    let isMinimized = false;
+    let pingHistory = [18, 16, 20, 22, 24, 23, 21, 24, 26, 22, 25, 24];
+
+    // INITIALIZATION
+    window.onload = function() {
+      applyNetwork(networkProfiles.vpn, false);
+      renderLogs();
+      initSparkline();
+      startPingSimulation();
+    };
+
+    // SWITCH NETWORK HANDLER
+    function switchNetwork(type) {
+      const prevNet = networkProfiles[currentNetwork];
+      const nextNet = networkProfiles[type];
+      if (currentNetwork === type) return;
+
+      currentNetwork = type;
+      applyNetwork(nextNet, true);
+
+      // Add to log
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      logs.unshift({
+        time: timeStr,
+        from: `${prevNet.name} (${prevNet.gateway})`,
+        to: `${nextNet.name} (${nextNet.gateway})`,
+        status: type === 'offline' ? 'alert' : 'switch'
+      });
+      if (logs.length > 5) logs.pop();
+      renderLogs();
+
+      // Trigger Windows-like Toast
+      showToast(
+        type === 'offline' ? 'Red Desconectada' : 'Salto de Red Detectado',
+        `Ahora en: ${nextNet.name} | Gateway: ${nextNet.gateway} | IP: ${nextNet.ipLocal}`,
+        nextNet.icon,
+        nextNet.colorTheme
+      );
+    }
+
+    // APPLY NETWORK DATA TO DOM
+    function applyNetwork(net, animate) {
+      const banner = document.getElementById('badgeBanner');
+      const iconBox = document.getElementById('badgeIconBox');
+      const badgeIcon = document.getElementById('badgeIcon');
+      const badgeTitle = document.getElementById('badgeTitle');
+      const badgeSub = document.getElementById('badgeSub');
+      const statusTag = document.getElementById('statusTag');
+      const badgePulse = document.getElementById('badgePulse');
+
+      // Set text
+      badgeTitle.innerText = net.name;
+      badgeSub.innerText = net.sub;
+      statusTag.innerText = net.tag;
+      badgeIcon.className = `fa-solid ${net.icon}`;
+
+      document.getElementById('ipLocalVal').innerText = net.ipLocal;
+      document.getElementById('gatewayVal').innerText = net.gateway;
+      document.getElementById('gwMacLabel').innerText = `MAC: ${net.gwMac}`;
+      document.getElementById('segmentVal').innerText = net.segment;
+      document.getElementById('broadcastVal').innerText = `BCast: ${net.bcast}`;
+      document.getElementById('ifaceLabel').innerText = `Iface: ${net.iface}`;
+      document.getElementById('publicIpVal').innerText = net.publicIp;
+      document.getElementById('ispVal').innerText = net.isp;
+
+      document.getElementById('gwPingVal').innerText = net.gwPing > 0 ? `${net.gwPing} ms` : '--';
+      document.getElementById('extPingVal').innerText = net.extPing > 0 && net.extPing < 900 ? `${net.extPing} ms` : (net.extPing >= 900 ? 'Timeout' : '--');
+      document.getElementById('lossLabel').innerText = net.extPing >= 900 ? '100% Loss' : (net.id === 'offline' ? 'Sin Enlace' : '0% Loss');
+
+      // Color palette class switching
+      const colors = {
+        emerald: { banner: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300', box: 'bg-emerald-500/20 border-emerald-400/40 text-emerald-400', pulse: 'bg-emerald-400' },
+        cyan: { banner: 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300', box: 'bg-cyan-500/20 border-cyan-400/40 text-cyan-400', pulse: 'bg-cyan-400' },
+        purple: { banner: 'bg-purple-500/15 border-purple-500/40 text-purple-300', box: 'bg-purple-500/20 border-purple-400/40 text-purple-400', pulse: 'bg-purple-400' },
+        amber: { banner: 'bg-amber-500/15 border-amber-500/40 text-amber-300', box: 'bg-amber-500/20 border-amber-400/40 text-amber-400', pulse: 'bg-amber-400' },
+        blue: { banner: 'bg-blue-500/15 border-blue-500/40 text-blue-300', box: 'bg-blue-500/20 border-blue-400/40 text-blue-400', pulse: 'bg-blue-400' },
+        rose: { banner: 'bg-rose-500/15 border-rose-500/40 text-rose-300', box: 'bg-rose-500/20 border-rose-400/40 text-rose-400', pulse: 'bg-rose-500' }
+      };
+
+      const c = colors[net.colorTheme] || colors.cyan;
+      banner.className = `p-3 rounded-2xl mb-3 flex items-center justify-between transition-all duration-300 border ${c.banner}`;
+      iconBox.className = `w-10 h-10 rounded-xl border flex items-center justify-center text-lg relative ${c.box}`;
+      badgePulse.className = `absolute -top-1 -right-1 w-3 h-3 rounded-full pulse-indicator ${c.pulse}`;
+
+      if (animate) {
+        banner.style.transform = 'scale(0.98)';
+        setTimeout(() => banner.style.transform = 'scale(1)', 150);
+      }
+    }
+
+    // RENDER LOGS
+    function renderLogs() {
+      const container = document.getElementById('logsContainer');
+      container.innerHTML = '';
+      logs.forEach(log => {
+        const item = document.createElement('div');
+        item.className = 'win11-subcard p-2 rounded-xl text-[10px] flex items-center justify-between';
+        item.innerHTML = `
+          <div class="flex items-center gap-2 truncate">
+            <i class="fa-solid ${log.status === 'alert' ? 'fa-triangle-exclamation text-rose-400' : 'fa-arrows-split-up-and-left text-cyan-400'}"></i>
+            <span class="text-slate-300 truncate">${log.from} <i class="fa-solid fa-arrow-right text-[8px] text-slate-500 mx-1"></i> <b class="text-white">${log.to}</b></span>
+          </div>
+          <span class="mono text-slate-500 shrink-0 ml-2">${log.time}</span>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function clearLogs() {
+      logs = [];
+      renderLogs();
+    }
+
+    // TOAST NOTIFICATION
+    let toastTimeout;
+    function showToast(title, msg, icon, color) {
+      clearTimeout(toastTimeout);
+      const toast = document.getElementById('toastNotification');
+      document.getElementById('toastTitle').innerText = title;
+      document.getElementById('toastMsg').innerText = msg;
+      document.getElementById('toastTime').innerText = new Date().toTimeString().split(' ')[0];
+      document.getElementById('toastIcon').className = `fa-solid ${icon}`;
+
+      toast.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      toastTimeout = setTimeout(() => {
+        hideToast();
+      }, 5000);
+    }
+
+    function hideToast() {
+      const toast = document.getElementById('toastNotification');
+      toast.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+      toast.classList.remove('translate-y-0', 'opacity-100');
+    }
+
+    // SPARKLINE PING ANIMATION
+    function initSparkline() {
+      const canvas = document.getElementById('pingCanvas');
+      const ctx = canvas.getContext('2d');
+      drawSparkline(ctx, canvas);
+    }
+
+    function drawSparkline(ctx, canvas) {
+      const w = canvas.width = canvas.parentElement.clientWidth;
+      const h = canvas.height = 34;
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.beginPath();
+      const step = w / (pingHistory.length - 1);
+      const maxVal = Math.max(...pingHistory, 60);
+
+      pingHistory.forEach((val, i) => {
+        const x = i * step;
+        const y = h - (val / maxVal * (h - 8)) - 4;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      // Fill area under curve
+      ctx.lineTo(w, h);
+      ctx.lineTo(0, h);
+      ctx.closePath();
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
+      grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    function startPingSimulation() {
+      setInterval(() => {
+        const net = networkProfiles[currentNetwork];
+        let nextPing;
+        if (net.extPing >= 900) {
+          nextPing = 99;
+        } else if (net.id === 'offline') {
+          nextPing = 0;
+        } else {
+          // slight random jitter +/- 3ms
+          nextPing = Math.max(2, net.extPing + Math.floor(Math.random() * 7 - 3));
+        }
+        pingHistory.push(nextPing);
+        if (pingHistory.length > 20) pingHistory.shift();
+
+        const canvas = document.getElementById('pingCanvas');
+        if (canvas) {
+          drawSparkline(canvas.getContext('2d'), canvas);
+        }
+      }, 1400);
+    }
+
+    // REFRESH BUTTON SPIN
+    function refreshData() {
+      const icon = document.getElementById('refreshIcon');
+      icon.classList.add('fa-spin');
+      setTimeout(() => {
+        icon.classList.remove('fa-spin');
+        applyNetwork(networkProfiles[currentNetwork], true);
+        showToast('Red Verificada', 'Detección sincronizada con adaptador Windows.', 'fa-circle-check', 'cyan');
+      }, 600);
+    }
+
+    // PIN TOGGLE
+    function togglePin() {
+      isPinned = !isPinned;
+      const btn = document.getElementById('pinBtn');
+      if (isPinned) {
+        btn.classList.add('text-cyan-400', 'bg-cyan-500/20');
+        showToast('Modo Fijado (Always on Top)', 'El widget se mantendrá sobre otras ventanas.', 'fa-thumbtack', 'cyan');
+      } else {
+        btn.classList.remove('text-cyan-400', 'bg-cyan-500/20');
+      }
+    }
+
+    // MINIMIZE WIDGET TOGGLE
+    function toggleMinimize() {
+      const container = document.getElementById('widgetContainer');
+      const isCompact = container.classList.toggle('scale-95');
+      showToast(isCompact ? 'Vista Compacta' : 'Vista Expandida', 'Modo de visualización adaptado.', 'fa-window-restore', 'cyan');
+    }
+
+    // CLIPBOARD ACTIONS
+    function copyToClipboard(elementId, msg) {
+      const text = document.getElementById(elementId).innerText;
+      copyDirect(text);
+      showToast('Copiado', msg, 'fa-copy', 'cyan');
+    }
+
+    function copyAllDetails() {
+      const net = networkProfiles[currentNetwork];
+      const summary = `--- NETWORK SENTINEL WIDGET ---
+Red: ${net.name} (${net.tag})
+IP Local: ${net.ipLocal}
+Gateway: ${net.gateway}
+Segmento: ${net.segment}
+IP Pública: ${net.publicIp}
+ISP: ${net.isp}
+Interfaz: ${net.iface}
+Hora: ${new Date().toLocaleTimeString()}
+-------------------------------`;
+      copyDirect(summary);
+      showToast('Resumen Copiado', 'Toda la configuración de red fue copiada.', 'fa-clipboard-check', 'emerald');
+    }
+
+    function copyDirect(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch (err) {
+        console.error('Error al copiar', err);
+      }
+      document.body.removeChild(ta);
+    }
+
+    // MODAL PYTHON
+    function openPythonModal() {
+      document.getElementById('codeModal').classList.remove('hidden');
+    }
+    function closePythonModal() {
+      document.getElementById('codeModal').classList.add('hidden');
+    }
+    function copyPythonCode() {
+      const code = document.getElementById('pythonCodeSnippet').innerText;
+      copyDirect(code);
+      showToast('Código Copiado', 'Script de Python listo para guardar en network_widget.py', 'fa-file-code', 'purple');
+      closePythonModal();
+    }
+  </script>
+</body>
+</html>

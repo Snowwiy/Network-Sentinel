@@ -1,0 +1,110 @@
+==============================================
+  NETWORK SENTINEL - Widget de escritorio
+==============================================
+
+QUÉ ES
+------
+Widget que vigila tu red y detecta automáticamente en qué red estás:
+
+  - VPN Activa
+  - Puente de Red (bridge de Windows)
+  - Red Oficina (Ethernet)
+  - Cámaras CCTV
+  - Redes con etiqueta propia (VLAN1, VLAN2...)
+  - Red Genérica
+  - Sin conexión
+
+Cada vez que cambia la red, lo registra en el historial (con hora y fecha).
+
+CÓMO INICIARLO
+--------------
+Doble clic en:   NetworkSentinel.exe   (recomendado: lleva el icono de la app)
+o también en:    NetworkSentinel.bat
+
+Se abre sin ninguna ventana de consola. Si quieres que arranque solo con
+Windows: crea un acceso directo a NetworkSentinel.exe, pulsa Win+R, escribe
+shell:startup y pega ahí el acceso directo.
+
+CÓMO CERRARLO
+-------------
+- Botón X del propio widget (arriba a la derecha).
+- La chincheta (pin) fija el widget siempre visible sobre las demás ventanas.
+- La posición de la ventana y el estado del pin se recuerdan al cerrar.
+
+QUÉ MUESTRA
+-----------
+- Banner con la red detectada (cada tipo de red tiene su color).
+- Tu IP local, gateway (con MAC), segmento de red e IP pública (con ISP).
+- Ping al gateway y a 1.1.1.1 con gráfico en vivo y % de pérdida.
+- DNS, MTU y velocidad de enlace.
+- Historial de cambios de red con hora/fecha y botón "Limpiar".
+- Botón "Copiar Resumen": copia todo al portapapeles.
+- Al cambiar de red: destello + aviso (toast) + entrada en el historial.
+
+AJUSTES DEL WIDGET (icono de engranaje, arriba a la derecha)
+------------------------------------------------------------
+Abre el panel de ajustes dentro del propio widget:
+
+  Tema      Sistema (sigue a Windows), Oscuro, Claro o Drácula.
+            Se aplica al instante y se recuerda al cerrar.
+  Subredes de cámaras
+            Una o varias subredes CIDR separadas por comas
+            (ej: 192.168.100.0/24, 10.10.0.0/16). Vacío = detección de
+            cámaras desactivada.
+  Etiquetas de subred
+            Una por línea, formato "subred = nombre". Ej:
+              10.0.1.0/24 = VLAN1 Admin
+              10.0.2.0/24 = VLAN2 Invitados
+            Cuando tu IP (o la puerta de enlace) cae en esa subred, el
+            widget muestra ese nombre con color propio y registra los
+            saltos entre VLANs en el historial.
+  Pulsa "Guardar" para aplicar los cambios (la detección se actualiza
+  al momento).
+
+REGLAS DE DETECCIÓN (opciones avanzadas)
+----------------------------------------
+La subred de cámaras se personaliza desde el panel de ajustes (ver arriba).
+El resto de reglas, si necesitas afinarlas, están en el bloque $Cfg al inicio
+de NetworkSentinel.ps1 (ábrelo con el Bloc de notas):
+
+  OfficeSubnets   (Opcional) Subred(es) de la oficina. Si está vacío, se
+                  considera Oficina a cualquier Ethernet por cable activa.
+  SubnetLabels    Etiquetas 'subred = nombre' (mejor configurarlas desde
+                  el panel de ajustes del widget).
+  VpnRegex        Nombres de adaptadores que se consideran VPN.
+  PollSeconds     Cada cuántos segundos se comprueba la red (2 por defecto).
+
+Guarda el archivo y vuelve a abrir el widget.
+
+ARCHIVOS QUE CREA
+-----------------
+En esta misma carpeta (si no se puede escribir, en %LOCALAPPDATA%\NetworkSentinel):
+
+  network_sentinel_history.json    Historial de cambios (máximo 200 entradas)
+  network_sentinel_settings.json   Posición, pin, tema y subredes de cámaras
+
+Se pueden borrar sin problema: se regeneran solos.
+
+PROBAR LA DETECCIÓN SIN ABRIR EL WIDGET
+---------------------------------------
+powershell -NoProfile -ExecutionPolicy Bypass -File NetworkSentinel.ps1 -Test
+
+NOTAS
+-----
+- No requiere instalar nada: usa PowerShell 5.1 + WPF, incluidos en Windows 10/11.
+- Solo puede haber una copia abierta a la vez (si abres otra, se ignora).
+- La IP pública se consulta a internet una vez por minuto (ip-api.com y
+  alternativas). El resto de datos son locales.
+- Las VLAN (etiqueta 802.1Q) no son visibles desde un PC normal: el switch
+  retira la etiqueta antes de entregarte el tráfico. Por eso la red se
+  identifica por subred y las "Etiquetas de subred" te dejan ponerle a
+  cada VLAN su nombre una sola vez.
+- Icono: NetworkSentinel.ico es el icono de la aplicación. Se muestra en la
+  barra de título del widget y va embebido en NetworkSentinel.exe. Si cambias
+  el .ico, ejecuta src\_build_exe.ps1 para regenerar el exe.
+- Carpeta src\: código fuente por piezas (_p1..._p3b.ps1), _combine.ps1 para
+  recomponer NetworkSentinel.ps1, _build_exe.ps1 (+ _exe_stub.cs) para
+  regenerar NetworkSentinel.exe y _widget_ctl.ps1 para cerrar el widget por
+  script. Para usar el widget no hace falta tocar nada de eso.
+- El archivo "network_sentinel desktop_widget.html" es el diseño original
+  de referencia; el widget real no lo necesita.

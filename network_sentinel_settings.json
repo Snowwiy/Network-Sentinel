@@ -1,0 +1,12 @@
+{
+    "Left":  1791,
+    "Top":  511,
+    "Pinned":  false,
+    "Theme":  "dark",
+    "CamerasSubnets":  [
+                           "192.168.100.0/24"
+                       ],
+    "SubnetLabels":  [
+
+                     ]
+}
